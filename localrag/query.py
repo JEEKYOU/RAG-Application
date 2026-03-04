@@ -1,42 +1,25 @@
 import ollama
-from qdrant_client import QdrantClient
-
-COLLECTION = "wiki"
-
-client = QdrantClient("localhost", port=6333)
-
-def embed(text):
-    response = ollama.embeddings(
-        model="nomic-embed-text",
-        prompt=text
-    )
-    return response["embedding"]
-
-def retrieve(query):
-    query_vector = embed(query)
-
-    hits = client.search(
-        collection_name=COLLECTION,
-        query_vector=query_vector,
-        limit=5
-    )
-
-    return [hit.payload["text"] for hit in hits]
+from retriever import retrieve
+from config import LLM_MODEL, SYSTEM_PROMPT
 
 def answer(query):
-    context = "\n\n".join(retrieve(query))
+    context_chunks = retrieve(query)
+    context = "\n\n".join(context_chunks)
 
     response = ollama.chat(
-        model="mistral",
+        model=LLM_MODEL,
         messages=[
-            {"role": "system", "content": "Answer strictly using provided context."},
-            {"role": "user", "content": f"""
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"""
 Context:
 {context}
 
 Question:
 {query}
-"""}
+"""
+            }
         ]
     )
 
@@ -44,5 +27,9 @@ Question:
 
 if __name__ == "__main__":
     while True:
-        q = input("Ask: ")
+        q = input("\nAsk a question (or type 'exit'): ")
+        if q.lower() == "exit":
+            break
+
+        print("\nAnswer:\n")
         print(answer(q))
