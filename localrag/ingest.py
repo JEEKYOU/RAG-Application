@@ -1,25 +1,13 @@
 import uuid
 import ollama
-from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
+from qdrant_client.models import PointStruct
 from chunker import chunk_markdown
-
-COLLECTION = "wiki"
-
-client = QdrantClient("localhost", port=6333)
-
-def create_collection():
-    client.recreate_collection(
-        collection_name=COLLECTION,
-        vectors_config=VectorParams(
-            size=768,
-            distance=Distance.COSINE
-        ),
-    )
+from vector_store import create_collection, upsert_points
+from config import EMBEDDING_MODEL, COLLECTION_NAME
 
 def embed(text):
     response = ollama.embeddings(
-        model="nomic-embed-text",
+        model=EMBEDDING_MODEL,
         prompt=text
     )
     return response["embedding"]
@@ -29,10 +17,13 @@ def ingest():
         text = f.read()
 
     chunks = chunk_markdown(text)
+    print(f"Total chunks: {len(chunks)}")
+
     points = []
 
     for chunk in chunks:
         vector = embed(chunk)
+
         points.append(
             PointStruct(
                 id=str(uuid.uuid4()),
@@ -41,9 +32,9 @@ def ingest():
             )
         )
 
-    client.upsert(collection_name=COLLECTION, points=points)
+    upsert_points(points)
+    print("Ingestion complete.")
 
 if __name__ == "__main__":
     create_collection()
     ingest()
-    print("Ingestion complete.")
